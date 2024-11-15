@@ -14,8 +14,9 @@ const url = require('url');
 
 dotenv.config();
 
-const mongoUrl = process.env.MONGO_URI
+//const mongoUrl = process.env.MONGO_URI
 // const mongoUrl = "mongodb://127.0.0.1:27017/userDB"
+const mongoUrl = "mongodb+srv://muskan30092000:CpMmALXlFF4kUn5m@cluster0.sneqypv.mongodb.net/CRMatlas?retryWrites=true&w=majority"
 if (!mongoUrl) {
   console.log("MONGO_URL environment variable is not set")
   console.error("MONGO_URL environment variable is not set");
