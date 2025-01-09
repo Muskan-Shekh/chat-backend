@@ -14,9 +14,8 @@ const url = require('url');
 
 dotenv.config();
 
-//const mongoUrl = process.env.MONGO_URI
+const mongoUrl = process.env.MONGO_URI
 // const mongoUrl = "mongodb://127.0.0.1:27017/userDB"
-const mongoUrl = "mongodb+srv://muskan30092000:CpMmALXlFF4kUn5m@cluster0.sneqypv.mongodb.net/CRMatlas?retryWrites=true&w=majority"
 if (!mongoUrl) {
   console.log("MONGO_URL environment variable is not set")
   console.error("MONGO_URL environment variable is not set");
@@ -53,7 +52,8 @@ app.use(cookieParser());
 const allowedOrigins = [
   'http://localhost:5173',
   'https://universal-movers-front.vercel.app',
-  'https://universal-movers-front-3wr2.vercel.app'
+  'https://universal-movers-front-3wr2.vercel.app',
+  'https://techbeepcrm.netlify.app'
 ];
 
 app.use(cors({
@@ -121,6 +121,17 @@ app.get('/chatBackend/people', async (req, res) => {
   res.json(users);
 });
 
+app.post('/chatBackend/manually_message', async (req, res) => {
+  try {
+    const messageData = req.body;
+    const newMessage = new Message(messageData);
+    await newMessage.save();
+    res.status(201).json(newMessage);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // --------------------------------------------------------unread message api  ------------------
 
 app.get('/chatBackend/notifications', async (req, res) => {
@@ -129,7 +140,6 @@ app.get('/chatBackend/notifications', async (req, res) => {
     const unreadMessages = await Message.find({ recipient: userData.userId, read: false })
       .populate('sender', 'username')
       .sort({ createdAt: -1 });
-
     res.json(unreadMessages);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -163,12 +173,7 @@ app.get('/chatBackend/profile', async (req, res) => {
     if (!user) {
       return res.status(404).json({ msg: 'User not found' }); // Use 404 for not found
     }
-    return res.status(200).json({
-        userId: user._id,
-        username: user.username,
-        email: user.email,
-        role: user.role
-    });
+    return res.status(200).json(user);
   } catch (error) {
     if (error.message === 'No token provided') {
       return res.status(401).json({ error: 'No token provided' });
@@ -255,6 +260,7 @@ wss.on('connection', (connection, req) => {
   // const cookies = req.headers.cookie;
   if (query) {
     const token = query.token;
+    // console.log('Received token:', token);
     if (token) {
       jwt.verify(token, jwtSecret, {}, (err, userData) => {
         if (err) throw err;
@@ -266,41 +272,41 @@ wss.on('connection', (connection, req) => {
   }
 
   connection.on('message', async (message) => {
-  const messageData = JSON.parse(message.toString());
-  const { recipient, text, file, sender } = messageData;
-  let filename = null;
-  if (file) {
-    console.log('size', file.data.length);
-    const parts = file.name.split('.');
-    const ext = parts[parts.length - 1];
-    filename = Date.now() + '.' + ext;
-    const path = __dirname + '/uploads/' + filename;
-    const bufferData = new Buffer(file.data.split(',')[1], 'base64');
-    fs.writeFile(path, bufferData, () => {
-      console.log('file saved:' + path);
-    });
-  }
+    const messageData = JSON.parse(message.toString());
+    const { recipient, text, file, sender } = messageData;
+    let filename = null;
+    if (file) {
+      console.log('size', file.data.length);
+      const parts = file.name.split('.');
+      const ext = parts[parts.length - 1];
+      filename = Date.now() + '.' + ext;
+      const path = __dirname + '/uploads/' + filename;
+      const bufferData = new Buffer(file.data.split(',')[1], 'base64');
+      fs.writeFile(path, bufferData, () => {
+        console.log('file saved:' + path);
+      });
+    }
 
-  if (recipient && (text || file)) {
-    const messageDoc = await Message.create({
-      sender: sender,
-      recipient,
-      text,
-      file: file ? filename : null,
-    });
-    // console.log('created message',messageDoc);
-    [...wss.clients]
-      .filter(c => c.userId === recipient)
-      .forEach(c => c.send(JSON.stringify({
-        text,
-        sender,
+    if (recipient && (text || file)) {
+      const messageDoc = await Message.create({
+        sender: sender,
         recipient,
+        text,
         file: file ? filename : null,
-        _id: messageDoc._id,
-      })));
-  }
-});
+      });
+      // console.log('created message',messageDoc);
+      [...wss.clients]
+        .filter(c => c.userId === recipient)
+        .forEach(c => c.send(JSON.stringify({
+          text,
+          sender,
+          recipient,
+          file: file ? filename : null,
+          _id: messageDoc._id,
+        })));
+    }
+  });
 
-// notify everyone about online people (when someone connects)
-notifyAboutOnlinePeople();
+  // notify everyone about online people (when someone connects)
+  notifyAboutOnlinePeople();
 });
